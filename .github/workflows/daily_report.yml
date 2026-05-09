@@ -5,6 +5,9 @@ on:
     - cron: "0 10 * * 1-5"   # 週一到週五 18:00 台灣時間 (UTC+8)
   workflow_dispatch:           # 允許手動觸發
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   report:
     runs-on: ubuntu-latest
