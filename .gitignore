@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+debug_*.py
+test_*.py
