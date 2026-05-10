@@ -135,6 +135,8 @@ def _page(date, p1n, p2n, p2_shown, nav_html, p1_html, p2_html, chart_json) -> s
     const d=D[c.dataset.sid];
     if(!d||!d.prices.length)return;
     const bl=d.baseline;
+    const dev=Math.max(...d.prices.map(p=>Math.abs(p-bl)),bl*0.005);
+    const pad=dev*1.15;
     new Chart(c,{{
       type:'line',
       data:{{
@@ -166,7 +168,7 @@ def _page(date, p1n, p2n, p2_shown, nav_html, p1_html, p2_html, chart_json) -> s
       options:{{
         animation:false,responsive:true,maintainAspectRatio:false,
         plugins:{{legend:{{display:false}},tooltip:{{enabled:false}}}},
-        scales:{{x:{{display:false}},y:{{display:false}}}}
+        scales:{{x:{{display:false}},y:{{display:false,min:bl-pad,max:bl+pad}}}}
       }}
     }});
   }});
