@@ -15,10 +15,11 @@ def build_report(results: dict, date: str, intraday: dict) -> str:
         if r.stock_id in intraday:
             chart_data[r.stock_id] = intraday[r.stock_id]
 
+    p2_shown = p2[:15]
     p1_html = _grid(p1, intraday) if p1 else '<p class="empty">今日無符合個股</p>'
-    p2_html = _grid(p2, intraday) if p2 else '<p class="empty">今日無符合個股</p>'
+    p2_html = _grid(p2_shown, intraday) if p2_shown else '<p class="empty">今日無符合個股</p>'
 
-    return _page(date, len(p1), len(p2), p1_html, p2_html,
+    return _page(date, len(p1), len(p2), len(p2_shown), p1_html, p2_html,
                  json.dumps(chart_data, ensure_ascii=False))
 
 
@@ -50,7 +51,7 @@ def _card(r: StockResult, has_chart: bool) -> str:
     )
 
 
-def _page(date, p1n, p2n, p1_html, p2_html, chart_json) -> str:
+def _page(date, p1n, p2n, p2_shown, p1_html, p2_html, chart_json) -> str:
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -84,7 +85,7 @@ def _page(date, p1n, p2n, p1_html, p2_html, chart_json) -> str:
 </head>
 <body>
   <h1>📊 台股當沖選股報告</h1>
-  <p class="sub">{date}&nbsp;·&nbsp;第一優先 {p1n} 檔&nbsp;·&nbsp;第二優先 {p2n} 檔</p>
+  <p class="sub">{date}&nbsp;·&nbsp;第一優先 {p1n} 檔&nbsp;·&nbsp;第二優先 {p2_shown}/{p2n} 檔</p>
 
   <div class="sec">🥇 第一優先（一紅吃三黑 / 突破糾結均線）</div>
   {p1_html}
