@@ -71,7 +71,7 @@ def _page(date, p1n, p2n, p2_shown, p1_html, p2_html, chart_json) -> str:
     h1{{font-size:18px;font-weight:bold;padding:10px 0 4px}}
     .sub{{color:#888;font-size:12px;margin-bottom:16px}}
     .sec{{font-size:14px;font-weight:bold;margin:16px 0 8px;padding-left:8px;border-left:3px solid #f5a623}}
-    .grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}}
+    .grid{{display:flex;flex-direction:column;gap:8px}}
     .card{{background:#1c1f2a;border-radius:10px;padding:10px;min-width:0;overflow:hidden}}
     .rt{{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:4px}}
     .info-l{{min-width:0;flex:1}}
