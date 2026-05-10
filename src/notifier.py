@@ -45,7 +45,7 @@ class TelegramNotifier:
         tags = " | ".join(html.escape(c) for c in r.conditions)
         return (
             f"  • <b>{r.stock_id} {r.name}</b>  "
-            f"收:{r.close:.0f}元  "
+            f"收:{r.close:.2f}元  "
             f"{sign}{r.change_pct:.2%}  "
             f"量:{r.volume:,.0f}張  "
             f"[{tags}]"
@@ -116,7 +116,7 @@ class LineNotifier:
         tags = " | ".join(r.conditions)
         return (
             f"  • {r.stock_id} {r.name}  "
-            f"收:{r.close:.0f}元  "
+            f"收:{r.close:.2f}元  "
             f"{sign}{r.change_pct:.2%}  "
             f"量:{r.volume:,.0f}張  "
             f"[{tags}]"
