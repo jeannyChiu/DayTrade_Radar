@@ -338,7 +338,68 @@ class DataFetcher:
             print(f"  Warning: OTC institutional data unavailable ({e})")
             return pd.DataFrame()
 
-    # ── Step 4: inner/outer market ratio (Yahoo Finance Taiwan) ──────────────
+    # ── Step 4: intraday 1-minute close prices (yfinance) ────────────────────
+
+    def get_intraday_data(self, stock_ids: list, market_map: dict = None) -> dict:
+        """Fetch today's 1-minute close prices for each stock via yfinance.
+        Returns {stock_id: {"times": ["09:01", ...], "prices": [123.5, ...]}}."""
+        import yfinance as yf
+
+        if not stock_ids:
+            return {}
+        if market_map is None:
+            market_map = {}
+
+        ticker_to_sid = {}
+        for sid in stock_ids:
+            suffix = "TWO" if market_map.get(sid) == "OTC" else "TW"
+            ticker_to_sid[f"{sid}.{suffix}"] = sid
+
+        tickers = list(ticker_to_sid.keys())
+        try:
+            raw = yf.download(tickers, period="1d", interval="1m",
+                              auto_adjust=True, progress=False)
+        except Exception as e:
+            print(f"  Warning: intraday fetch failed ({e})")
+            return {}
+
+        if raw.empty:
+            return {}
+
+        if isinstance(raw.columns, pd.MultiIndex):
+            try:
+                stacked = raw.stack(level="Ticker").reset_index()
+            except KeyError:
+                stacked = raw.stack(level=-1).reset_index()
+            cols = stacked.columns.tolist()
+            stacked = stacked.rename(columns={cols[0]: "dt", cols[1]: "ticker"})
+        else:
+            stacked = raw.reset_index()
+            stacked.columns.name = None
+            stacked["ticker"] = tickers[0]
+            stacked = stacked.rename(columns={stacked.columns[0]: "dt"})
+
+        stacked = stacked.rename(columns={"Close": "close"})
+        stacked["stock_id"] = stacked["ticker"].map(ticker_to_sid)
+        stacked["close"] = pd.to_numeric(stacked.get("close", pd.Series(dtype=float)), errors="coerce")
+        stacked = stacked.dropna(subset=["stock_id", "close"])
+
+        result = {}
+        for sid, grp in stacked.groupby("stock_id"):
+            grp = grp.sort_values("dt")
+            dts = pd.to_datetime(grp["dt"])
+            if dts.dt.tz is not None:
+                dts = dts.dt.tz_convert("Asia/Taipei")
+            else:
+                dts = dts.dt.tz_localize("UTC").dt.tz_convert("Asia/Taipei")
+            result[str(sid)] = {
+                "times":  dts.dt.strftime("%H:%M").tolist(),
+                "prices": [round(float(p), 2) for p in grp["close"]],
+            }
+
+        return result
+
+    # ── Step 5: inner/outer market ratio (Yahoo Finance Taiwan) ──────────────
 
     def get_inner_outer_data(self, stock_ids: list, market_map: dict = None) -> pd.DataFrame:
         """Fetch 內外盤 data from Yahoo Finance Taiwan StockServices API.

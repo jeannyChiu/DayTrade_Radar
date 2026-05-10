@@ -9,6 +9,7 @@ load_dotenv()
 from src.data_fetcher import DataFetcher
 from src.screener import Screener
 from src.notifier import TelegramNotifier, LineNotifier
+from src.report_builder import build_report
 
 
 def main():
@@ -21,7 +22,7 @@ def main():
     fetcher = DataFetcher()
 
     # ── 1. Today's full-market snapshot (TWSE 上市 + TPEx 上櫃) ───────────────
-    print("[1/5] Fetching today's market snapshot ...")
+    print("[1/7] Fetching today's market snapshot ...")
     twse_df = fetcher.get_today_all_stocks()
     otc_df  = fetcher.get_today_otc_stocks()
 
@@ -33,7 +34,7 @@ def main():
     print(f"      TWSE {len(twse_df)} + OTC {len(otc_df)} = {len(today_df)} stocks")
 
     # ── 2. Identify candidates ─────────────────────────────────────────────────
-    print("[2/5] Identifying candidates ...")
+    print("[2/7] Identifying candidates ...")
 
     # Approx change% from TWSE spread (spread = close - prev_close)
     today_df["prev_close"] = today_df["close"] - today_df["spread"].fillna(0)
@@ -67,7 +68,7 @@ def main():
     # ── 3. Historical data for candidates (yfinance) ───────────────────────────
     end_date   = datetime.now().strftime("%Y-%m-%d")
     start_date = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d")
-    print(f"[3/5] Fetching 40-day history for {len(candidates)} stocks from yfinance ...")
+    print(f"[3/7] Fetching 40-day history for {len(candidates)} stocks from yfinance ...")
     price_df = fetcher.get_stock_history(list(candidates), start_date, end_date, market_map=market_map)
     if price_df.empty:
         print("No historical data. Exiting.")
@@ -77,16 +78,16 @@ def main():
     print(f"      Latest trading date: {today_str}")
 
     # ── 4. Institutional investor data ─────────────────────────────────────────
-    print("[4/6] Fetching institutional investor data ...")
+    print("[4/7] Fetching institutional investor data ...")
     institutional_df = fetcher.get_institutional_data(today_str)
 
     # ── 5. Inner/outer market ratio ─────────────────────────────────────────────
-    print(f"[5/6] Fetching inner/outer market data for {len(candidates)} stocks ...")
+    print(f"[5/7] Fetching inner/outer market data for {len(candidates)} stocks ...")
     inner_outer_df = fetcher.get_inner_outer_data(list(candidates), market_map=market_map)
     print(f"      Got inner/outer data for {len(inner_outer_df)} stocks")
 
-    # ── 6. Screen & notify ─────────────────────────────────────────────────────
-    print("[6/6] Running screener ...")
+    # ── 6. Screen ──────────────────────────────────────────────────────────────
+    print("[6/7] Running screener ...")
     screener = Screener()
     results = screener.screen(
         price_df, institutional_df, today_str,
@@ -98,6 +99,18 @@ def main():
 
     p1, p2 = len(results["p1"]), len(results["p2"])
     print(f"      Found: P1={p1}, P2={p2}")
+
+    # ── 7. Intraday charts + HTML report + LINE notification ───────────────────
+    print("[7/7] Building HTML report ...")
+    selected = [r.stock_id for r in results["p1"]] + [r.stock_id for r in results["p2"]]
+    intraday = fetcher.get_intraday_data(selected, market_map=market_map) if selected else {}
+    print(f"      Intraday data for {len(intraday)} stocks")
+
+    os.makedirs("docs", exist_ok=True)
+    html = build_report(results, today_str, intraday)
+    with open("docs/index.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print("      HTML saved to docs/index.html")
 
     notifier = LineNotifier(token=line_token)
     notifier.send_report(results, today_str)

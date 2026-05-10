@@ -85,31 +85,19 @@ class LineNotifier:
             "Content-Type": "application/json",
         }
 
+    PAGES_URL = "https://jeannychiu.github.io/DayTrade_Radar/"
+
     def send_report(self, results: dict, date: str):
-        p1: List[StockResult] = results.get("p1", [])
-        p2: List[StockResult] = results.get("p2", [])
-
-        lines = [f"📊 台股當沖選股報告 {date}\n"]
-
-        lines.append("🥇 第一優先（一紅吃三黑 / 突破糾結均線）")
-        if p1:
-            lines += [self._fmt(r) for r in p1]
-        else:
-            lines.append("  • 今日無符合個股")
-
-        lines.append("\n🥈 第二優先（量價+型態）")
-        if p2:
-            lines += [self._fmt(r) for r in p2[:15]]
-        else:
-            lines.append("  • 今日無符合個股")
-
-        shown = len(p1) + min(len(p2), 15)
-        total = len(p1) + len(p2)
-        lines.append(f"\n顯示 {shown} 檔 / 共 {total} 檔候選股")
-        lines.append("⚠️ 僅供參考，請自行評估風險")
-
-        message = "\n".join(lines)
-        self._send_chunked(message)
+        p1 = len(results.get("p1", []))
+        p2 = len(results.get("p2", []))
+        message = (
+            f"📊 台股當沖選股報告 {date} 已更新\n\n"
+            f"🥇 第一優先：{p1} 檔\n"
+            f"🥈 第二優先：{p2} 檔\n\n"
+            f"👉 點此查看完整報告及走勢圖\n"
+            f"{self.PAGES_URL}"
+        )
+        self._send(message)
 
     def _fmt(self, r: StockResult) -> str:
         sign = "+" if r.change_pct >= 0 else ""

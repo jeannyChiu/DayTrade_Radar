@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 debug_*.py
 test_*.py
+docs/
