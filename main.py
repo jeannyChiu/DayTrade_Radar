@@ -100,14 +100,21 @@ def main():
     p1, p2 = len(results["p1"]), len(results["p2"])
     print(f"      Found: P1={p1}, P2={p2}")
 
-    # ── 7. Intraday charts + HTML report + LINE notification ───────────────────
+    # ── 7. Intraday charts + sector + HTML report + LINE notification ──────────
     print("[7/7] Building HTML report ...")
     selected = [r.stock_id for r in results["p1"]] + [r.stock_id for r in results["p2"]]
     intraday = fetcher.get_intraday_data(selected, market_map=market_map) if selected else {}
     print(f"      Intraday data for {len(intraday)} stocks")
 
+    print("      Fetching sector data ...")
+    sector_raw = fetcher.get_sector_map()
+    sector_map = {}
+    for sid, sec in sector_raw.items():
+        market = "上櫃" if sid in otc_ids else "上市"
+        sector_map[sid] = f"{sec}（{market}）"
+
     os.makedirs("docs", exist_ok=True)
-    html = build_report(results, today_str, intraday)
+    html = build_report(results, today_str, intraday, sector_map=sector_map)
     with open("docs/index.html", "w", encoding="utf-8") as f:
         f.write(html)
     print("      HTML saved to docs/index.html")

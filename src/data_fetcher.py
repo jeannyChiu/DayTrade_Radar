@@ -338,6 +338,38 @@ class DataFetcher:
             print(f"  Warning: OTC institutional data unavailable ({e})")
             return pd.DataFrame()
 
+    # ── Step 3b: industry/sector map (TWSE ISIN pages) ───────────────────────
+
+    def get_sector_map(self) -> dict:
+        """Fetch 產業別 for all listed (上市) and OTC (上櫃) stocks.
+        Returns {stock_id: "產業別"}, e.g. {"4772": "化學工業"}."""
+        import io
+        result = {}
+        for mode in ["2", "4"]:  # 2=上市, 4=上櫃
+            try:
+                resp = self.session.get(
+                    f"https://isin.twse.com.tw/isin/C_public.jsp?strMode={mode}",
+                    timeout=20,
+                )
+                resp.encoding = "big5"
+                dfs = pd.read_html(io.StringIO(resp.text))
+                if not dfs:
+                    continue
+                df = dfs[0]
+                for _, row in df.iterrows():
+                    cell = str(row.iloc[0]).strip()
+                    parts = cell.split("　")  # full-width space
+                    if not parts:
+                        continue
+                    code = parts[0].strip()
+                    if len(code) == 4 and code.isdigit():
+                        sector = str(row.iloc[4]).strip() if len(row) > 4 else ""
+                        if sector and sector.lower() != "nan":
+                            result[code] = sector
+            except Exception as e:
+                print(f"  Warning: sector data unavailable (mode={mode}): {e}")
+        return result
+
     # ── Step 4: intraday 1-minute close prices (yfinance) ────────────────────
 
     def get_intraday_data(self, stock_ids: list, market_map: dict = None) -> dict:

@@ -6,9 +6,11 @@ from src.screener import StockResult
 PAGES_URL = "https://jeannychiu.github.io/DayTrade_Radar/"
 
 
-def build_report(results: dict, date: str, intraday: dict) -> str:
+def build_report(results: dict, date: str, intraday: dict, sector_map: dict = None) -> str:
     p1: List[StockResult] = results.get("p1", [])
     p2: List[StockResult] = results.get("p2", [])
+    if sector_map is None:
+        sector_map = {}
 
     chart_data = {}
     for r in p1 + p2:
@@ -18,19 +20,19 @@ def build_report(results: dict, date: str, intraday: dict) -> str:
             chart_data[r.stock_id] = {**intraday[r.stock_id], "baseline": baseline}
 
     p2_shown = p2[:15]
-    p1_html = _grid(p1, intraday) if p1 else '<p class="empty">今日無符合個股</p>'
-    p2_html = _grid(p2_shown, intraday) if p2_shown else '<p class="empty">今日無符合個股</p>'
+    p1_html = _grid(p1, intraday, sector_map) if p1 else '<p class="empty">今日無符合個股</p>'
+    p2_html = _grid(p2_shown, intraday, sector_map) if p2_shown else '<p class="empty">今日無符合個股</p>'
 
     return _page(date, len(p1), len(p2), len(p2_shown), p1_html, p2_html,
                  json.dumps(chart_data, ensure_ascii=False))
 
 
-def _grid(stocks: List[StockResult], intraday: dict) -> str:
-    cards = "".join(_card(r, r.stock_id in intraday) for r in stocks)
+def _grid(stocks: List[StockResult], intraday: dict, sector_map: dict) -> str:
+    cards = "".join(_card(r, r.stock_id in intraday, sector_map.get(r.stock_id, "")) for r in stocks)
     return f'<div class="grid">{cards}</div>'
 
 
-def _card(r: StockResult, has_chart: bool) -> str:
+def _card(r: StockResult, has_chart: bool, sector: str = "") -> str:
     up   = r.change_pct >= 0
     cls  = "up" if up else "dn"
     sign = "+" if up else ""
@@ -38,11 +40,13 @@ def _card(r: StockResult, has_chart: bool) -> str:
     tags = "".join(f'<span class="tag">{_h.escape(c)}</span>' for c in r.conditions)
     chart = (f'<div class="cw"><canvas data-sid="{r.stock_id}"></canvas></div>'
              if has_chart else "")
+    sector_html = f'<div class="sec-lbl">{_h.escape(sector)}</div>' if sector else ""
     return (
         f'<div class="card">'
         f'<div class="rt">'
         f'<div class="info-l"><div class="sn">{_h.escape(r.name)}</div>'
-        f'<div class="si">{r.stock_id}</div></div>'
+        f'<div class="si">{r.stock_id}</div>'
+        f'{sector_html}</div>'
         f'<div class="ir"><div class="px {cls}">{r.close:.2f}</div>'
         f'<div class="ch {cls}">{sign}{r.change_pct:.2%}{arr}</div></div>'
         f'</div>'
@@ -73,6 +77,7 @@ def _page(date, p1n, p2n, p2_shown, p1_html, p2_html, chart_json) -> str:
     .info-l{{min-width:0;flex:1}}
     .sn{{font-size:14px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
     .si{{font-size:11px;color:#888;margin-top:2px}}
+    .sec-lbl{{font-size:10px;color:#666;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
     .ir{{text-align:right;flex-shrink:0}}
     .px{{font-size:17px;font-weight:bold}}
     .ch{{font-size:11px;margin-top:1px}}
