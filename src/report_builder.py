@@ -38,7 +38,7 @@ def _card(r: StockResult, has_chart: bool) -> str:
     return (
         f'<div class="card">'
         f'<div class="rt">'
-        f'<div><div class="sn">{_h.escape(r.name)}</div>'
+        f'<div class="info-l"><div class="sn">{_h.escape(r.name)}</div>'
         f'<div class="si">{r.stock_id}</div></div>'
         f'<div class="ir"><div class="px {cls}">{r.close:.2f}</div>'
         f'<div class="ch {cls}">{sign}{r.change_pct:.2%}{arr}</div></div>'
@@ -65,11 +65,12 @@ def _page(date, p1n, p2n, p1_html, p2_html, chart_json) -> str:
     .sub{{color:#888;font-size:12px;margin-bottom:16px}}
     .sec{{font-size:14px;font-weight:bold;margin:16px 0 8px;padding-left:8px;border-left:3px solid #f5a623}}
     .grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}}
-    .card{{background:#1c1f2a;border-radius:10px;padding:10px}}
-    .rt{{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}}
-    .sn{{font-size:14px;font-weight:bold}}
+    .card{{background:#1c1f2a;border-radius:10px;padding:10px;min-width:0;overflow:hidden}}
+    .rt{{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;gap:4px}}
+    .info-l{{min-width:0;flex:1}}
+    .sn{{font-size:14px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
     .si{{font-size:11px;color:#888;margin-top:2px}}
-    .ir{{text-align:right}}
+    .ir{{text-align:right;flex-shrink:0}}
     .px{{font-size:17px;font-weight:bold}}
     .ch{{font-size:11px;margin-top:1px}}
     .up{{color:#ff4444}}.dn{{color:#00cc55}}
