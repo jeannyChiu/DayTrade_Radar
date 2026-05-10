@@ -6,11 +6,16 @@ from src.screener import StockResult
 PAGES_URL = "https://jeannychiu.github.io/DayTrade_Radar/"
 
 
-def build_report(results: dict, date: str, intraday: dict, sector_map: dict = None) -> str:
+def build_report(
+    results: dict, date: str, intraday: dict,
+    sector_map: dict = None, available_dates: list = None,
+) -> str:
     p1: List[StockResult] = results.get("p1", [])
     p2: List[StockResult] = results.get("p2", [])
     if sector_map is None:
         sector_map = {}
+    if available_dates is None:
+        available_dates = [date]
 
     chart_data = {}
     for r in p1 + p2:
@@ -22,9 +27,11 @@ def build_report(results: dict, date: str, intraday: dict, sector_map: dict = No
     p2_shown = p2[:15]
     p1_html = _grid(p1, intraday, sector_map) if p1 else '<p class="empty">今日無符合個股</p>'
     p2_html = _grid(p2_shown, intraday, sector_map) if p2_shown else '<p class="empty">今日無符合個股</p>'
+    nav_html = _nav(available_dates, date)
 
-    return _page(date, len(p1), len(p2), len(p2_shown), p1_html, p2_html,
-                 json.dumps(chart_data, ensure_ascii=False))
+    return _page(date, p1n=len(p1), p2n=len(p2), p2_shown=len(p2_shown),
+                 nav_html=nav_html, p1_html=p1_html, p2_html=p2_html,
+                 chart_json=json.dumps(chart_data, ensure_ascii=False))
 
 
 def _grid(stocks: List[StockResult], intraday: dict, sector_map: dict) -> str:
@@ -57,7 +64,23 @@ def _card(r: StockResult, has_chart: bool, sector: str = "") -> str:
     )
 
 
-def _page(date, p1n, p2n, p2_shown, p1_html, p2_html, chart_json) -> str:
+def _nav(available_dates: list, current_date: str) -> str:
+    if len(available_dates) <= 1:
+        return ""
+    dates = sorted(available_dates)
+    idx = dates.index(current_date) if current_date in dates else len(dates) - 1
+    parts = []
+    if idx > 0:
+        d = dates[idx - 1]
+        parts.append(f'<a href="{d}.html" class="nb">← {d[5:]}</a>')
+    parts.append(f'<span class="nc">{current_date[5:]}</span>')
+    if idx < len(dates) - 1:
+        d = dates[idx + 1]
+        parts.append(f'<a href="{d}.html" class="nb">{d[5:]} →</a>')
+    return f'<div class="nav">{"".join(parts)}</div>'
+
+
+def _page(date, p1n, p2n, p2_shown, nav_html, p1_html, p2_html, chart_json) -> str:
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -87,12 +110,16 @@ def _page(date, p1n, p2n, p2_shown, p1_html, p2_html, chart_json) -> str:
     .tg{{display:flex;flex-wrap:wrap;gap:3px}}
     .tag{{background:#2a2d3a;color:#9ab;font-size:10px;padding:2px 5px;border-radius:3px}}
     .empty{{color:#666;font-size:13px;padding:8px 0}}
+    .nav{{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px}}
+    .nb{{color:#f5a623;font-size:13px;text-decoration:none;padding:4px 8px;background:#1c1f2a;border-radius:6px}}
+    .nc{{flex:1;text-align:center;font-size:13px;color:#aaa}}
     .foot{{margin-top:24px;color:#555;font-size:11px;text-align:center;padding-bottom:16px}}
   </style>
 </head>
 <body>
   <h1>📊 台股當沖選股報告</h1>
   <p class="sub">{date}&nbsp;·&nbsp;第一優先 {p1n} 檔&nbsp;·&nbsp;第二優先 {p2_shown}/{p2n} 檔</p>
+  {nav_html}
 
   <div class="sec">🥇 第一優先（一紅吃三黑 / 突破糾結均線）</div>
   {p1_html}

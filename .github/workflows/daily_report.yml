@@ -18,6 +18,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Restore previous reports from gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: docs
+        continue-on-error: true
+
+      - name: Remove reports older than 7 days
+        run: |
+          find docs -name "????-??-??.html" | sort | head -n -7 | xargs rm -f 2>/dev/null || true
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

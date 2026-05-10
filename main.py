@@ -1,4 +1,6 @@
+import glob
 import os
+import shutil
 import sys
 from datetime import datetime, timedelta
 import pandas as pd
@@ -114,10 +116,19 @@ def main():
         sector_map[sid] = f"{sec}（{market}）"
 
     os.makedirs("docs", exist_ok=True)
-    html = build_report(results, today_str, intraday, sector_map=sector_map)
-    with open("docs/index.html", "w", encoding="utf-8") as f:
+    existing = sorted(
+        os.path.basename(f).replace(".html", "")
+        for f in glob.glob("docs/????-??-??.html")
+    )
+    available_dates = sorted(set(existing) | {today_str})
+
+    html = build_report(results, today_str, intraday,
+                        sector_map=sector_map, available_dates=available_dates)
+    dated_path = f"docs/{today_str}.html"
+    with open(dated_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print("      HTML saved to docs/index.html")
+    shutil.copy(dated_path, "docs/index.html")
+    print(f"      HTML saved ({today_str}.html + index.html)")
 
     notifier = LineNotifier(token=line_token)
     notifier.send_report(results, today_str)
