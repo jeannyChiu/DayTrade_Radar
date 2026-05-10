@@ -13,7 +13,9 @@ def build_report(results: dict, date: str, intraday: dict) -> str:
     chart_data = {}
     for r in p1 + p2:
         if r.stock_id in intraday:
-            chart_data[r.stock_id] = intraday[r.stock_id]
+            denom = 1 + r.change_pct
+            baseline = round(r.close / denom, 2) if abs(denom) > 0.0001 else r.close
+            chart_data[r.stock_id] = {**intraday[r.stock_id], "baseline": baseline}
 
     p2_shown = p2[:15]
     p1_html = _grid(p1, intraday) if p1 else '<p class="empty">今日無符合個股</p>'
@@ -100,14 +102,40 @@ def _page(date, p1n, p2n, p2_shown, p1_html, p2_html, chart_json) -> str:
   document.querySelectorAll('canvas[data-sid]').forEach(c=>{{
     const d=D[c.dataset.sid];
     if(!d||!d.prices.length)return;
-    const up=d.prices[d.prices.length-1]>=d.prices[0];
+    const bl=d.baseline;
     new Chart(c,{{
       type:'line',
-      data:{{labels:d.times,datasets:[{{data:d.prices,borderColor:up?'#ff4444':'#00cc55',
-        borderWidth:1.5,pointRadius:0,fill:false,tension:0.2}}]}},
-      options:{{animation:false,responsive:true,maintainAspectRatio:false,
+      data:{{
+        labels:d.times,
+        datasets:[
+          {{
+            data:d.prices,
+            borderWidth:1.2,
+            pointRadius:0,
+            tension:0.1,
+            fill:{{target:{{value:bl}},above:'rgba(255,68,68,0.3)',below:'rgba(0,204,85,0.3)'}},
+            segment:{{
+              borderColor:ctx=>{{
+                const y0=ctx.p0.parsed.y,y1=ctx.p1.parsed.y;
+                return(y0>=bl&&y1>=bl)?'#ff4444':(y0<bl&&y1<bl)?'#00cc55':y0>=bl?'#ff4444':'#00cc55';
+              }}
+            }}
+          }},
+          {{
+            data:d.prices.map(()=>bl),
+            borderColor:'rgba(180,180,180,0.5)',
+            borderWidth:0.8,
+            borderDash:[3,3],
+            pointRadius:0,
+            fill:false
+          }}
+        ]
+      }},
+      options:{{
+        animation:false,responsive:true,maintainAspectRatio:false,
         plugins:{{legend:{{display:false}},tooltip:{{enabled:false}}}},
-        scales:{{x:{{display:false}},y:{{display:false}}}}}}
+        scales:{{x:{{display:false}},y:{{display:false}}}}
+      }}
     }});
   }});
   </script>
