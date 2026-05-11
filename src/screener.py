@@ -178,7 +178,7 @@ class Screener:
         if any(pd.isna(v) for v in ma_prev):
             return False
         spread = (max(ma_prev) - min(ma_prev)) / min(ma_prev)
-        if spread > 0.02:
+        if spread > 0.0203:
             return False
 
         today_close = closes.iloc[-1]
