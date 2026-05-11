@@ -158,11 +158,10 @@ class Screener:
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
         """突破糾結均線: MAs tangled (spread ≤ 2%) yesterday, today breaks above all
         three MAs with ≥ 4% gain, AND either:
-          (a) yesterday's close was within/below the MA band (≤ 1% above max MA), or
+          (a) yesterday's close was at or below the MA band (≤ 0.3% above min MA), or
           (b) tanglement has been sustained for ≥ 5 consecutive days ending yesterday.
-        Condition (a) filters stocks whose price had already escaped the MA band before
-        the breakout day — those are false positives where MAs happened to converge
-        briefly rather than a genuine consolidation."""
+        Condition (a) ensures the breakout is from below the band, not a continuation
+        within an already-entered band."""
         if len(g) < 21:
             return False
         closes = g["close"]
@@ -194,9 +193,9 @@ class Screener:
         if (today_close - prev_close) / prev_close < 0.04:
             return False
 
-        # Condition (a): price was within the MA band yesterday (not already above all MAs)
-        prev_max_ma = max(ma_prev)
-        if prev_close <= prev_max_ma * 1.01:
+        # Condition (a): price was at or below the MA band yesterday (genuine breakout from below)
+        prev_min_ma = min(ma_prev)
+        if prev_close <= prev_min_ma * 1.003:
             return True
 
         # Condition (b): ≥ 5 consecutive days of tanglement ending yesterday
