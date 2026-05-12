@@ -237,10 +237,10 @@ class Screener:
         if d2["close"] >= d2["open"]:
             return False
 
-        # d2 must be a long black (body ≥ 50% of candle range)
+        # d2 must be a long black (body ≥ 65% of candle range)
         body2 = d2["open"] - d2["close"]
         range2 = d2["max"] - d2["min"]
-        if range2 == 0 or body2 / range2 < 0.5:
+        if range2 == 0 or body2 / range2 < 0.65:
             return False
 
         # d1's high-low must be inside d2's high-low (inner bar)
