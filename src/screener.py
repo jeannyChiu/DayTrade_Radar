@@ -222,17 +222,19 @@ class Screener:
     # ── Priority-2 conditions ─────────────────────────────────────────────────
 
     def _inner_trapped_reversal(self, g: pd.DataFrame) -> bool:
-        """內困三日翻紅: the two days before today are long black K candles,
-        yesterday's range is contained within day-2's range,
-        and today breaks above both previous highs."""
+        """內困三日翻紅: 2 days ago is a long black K (the "trap"),
+        yesterday's range is contained within day-2's range (inside bar),
+        and today breaks above both previous highs.
+        Yesterday's color is not constrained — a small red inside bar is
+        actually a stronger reversal hint."""
         if len(g) < 3:
             return False
         d2 = g.iloc[-3]   # 2 days ago (long black)
-        d1 = g.iloc[-2]   # yesterday (inner bar, also black)
+        d1 = g.iloc[-2]   # yesterday (inside bar, any color)
         today = g.iloc[-1]
 
-        # Both must be black K
-        if d2["close"] >= d2["open"] or d1["close"] >= d1["open"]:
+        # d2 must be a black K
+        if d2["close"] >= d2["open"]:
             return False
 
         # d2 must be a long black (body ≥ 50% of candle range)
