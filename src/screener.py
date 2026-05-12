@@ -159,9 +159,10 @@ class Screener:
         """突破糾結均線: MAs tangled (spread ≤ 3%) yesterday, today breaks above all
         three MAs with ≥ 4% gain, AND yesterday's close was near the MA band:
           (a) ≤ 1.5% above the band's min MA → fresh breakout from below, or
-          (b) ≤ 5% above the band's max MA → near-band continuation breakout.
-        The near-band check excludes far-above-band continuation days (yesterday
-        already broke out and pulled price well above the MAs)."""
+          (b) ≤ 5% above the band's max MA AND tanglement (≤ 2%) sustained for
+              ≥ 2 of the most recent days → near-band continuation breakout.
+        The streak check on (b) filters out single-day borderline tanglement
+        where MAs only just converged the day before today's gain."""
         if len(g) < 21:
             return False
         closes = g["close"]
@@ -201,7 +202,22 @@ class Screener:
             return True
 
         # (b) near-band continuation: yesterday's close still close to the band
-        return prev_close <= prev_max_ma * 1.05
+        if prev_close > prev_max_ma * 1.05:
+            return False
+
+        # (b) prerequisite: sustained tangling (≤ 2%) for ≥ 2 consecutive days
+        # ending yesterday — rules out single-day borderline tanglement.
+        streak = 0
+        for i in range(-2, -len(g), -1):
+            m5_i, m10_i, m20_i = ma5.iloc[i], ma10.iloc[i], ma20.iloc[i]
+            if pd.isna(m5_i) or pd.isna(m10_i) or pd.isna(m20_i):
+                break
+            s = (max(m5_i, m10_i, m20_i) - min(m5_i, m10_i, m20_i)) / min(m5_i, m10_i, m20_i)
+            if s <= 0.02:
+                streak += 1
+            else:
+                break
+        return streak >= 2
 
     # ── Priority-2 conditions ─────────────────────────────────────────────────
 
