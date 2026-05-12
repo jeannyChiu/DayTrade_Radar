@@ -156,12 +156,12 @@ class Screener:
         return True
 
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
-        """突破糾結均線: MAs tangled (spread ≤ 2%) yesterday, today breaks above all
-        three MAs with ≥ 4% gain, AND either:
-          (a) yesterday's close was at or below the MA band (≤ 0.3% above min MA), or
-          (b) tanglement has been sustained for ≥ 5 consecutive days ending yesterday.
-        Condition (a) ensures the breakout is from below the band, not a continuation
-        within an already-entered band."""
+        """突破糾結均線: MAs tangled (spread ≤ 3%) yesterday, today breaks above all
+        three MAs with ≥ 4% gain, AND yesterday's close was near the MA band:
+          (a) ≤ 1.5% above the band's min MA → fresh breakout from below, or
+          (b) ≤ 5% above the band's max MA → near-band continuation breakout.
+        The near-band check excludes far-above-band continuation days (yesterday
+        already broke out and pulled price well above the MAs)."""
         if len(g) < 21:
             return False
         closes = g["close"]
@@ -172,12 +172,12 @@ class Screener:
         if pd.isna(ma20.iloc[-2]):
             return False
 
-        # Yesterday's MAs must be tangled (spread ≤ 2%)
+        # Yesterday's MAs must be tangled (spread ≤ 3%)
         ma_prev = [ma5.iloc[-2], ma10.iloc[-2], ma20.iloc[-2]]
         if any(pd.isna(v) for v in ma_prev):
             return False
         spread = (max(ma_prev) - min(ma_prev)) / min(ma_prev)
-        if spread > 0.0203:
+        if spread > 0.03:
             return False
 
         today_close = closes.iloc[-1]
@@ -193,23 +193,15 @@ class Screener:
         if (today_close - prev_close) / prev_close < 0.04:
             return False
 
-        # Condition (a): price was at or below the MA band yesterday (genuine breakout from below)
         prev_min_ma = min(ma_prev)
-        if prev_close <= prev_min_ma * 1.003:
+        prev_max_ma = max(ma_prev)
+
+        # (a) fresh breakout: yesterday's close at or below the band
+        if prev_close <= prev_min_ma * 1.015:
             return True
 
-        # Condition (b): ≥ 5 consecutive days of tanglement ending yesterday
-        streak = 0
-        for i in range(-2, -len(g), -1):
-            m5, m10, m20 = ma5.iloc[i], ma10.iloc[i], ma20.iloc[i]
-            if pd.isna(m5) or pd.isna(m10) or pd.isna(m20):
-                break
-            s = (max(m5, m10, m20) - min(m5, m10, m20)) / min(m5, m10, m20)
-            if s <= 0.02:
-                streak += 1
-            else:
-                break
-        return streak >= 5
+        # (b) near-band continuation: yesterday's close still close to the band
+        return prev_close <= prev_max_ma * 1.05
 
     # ── Priority-2 conditions ─────────────────────────────────────────────────
 
