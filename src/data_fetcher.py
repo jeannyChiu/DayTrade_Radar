@@ -149,7 +149,8 @@ class DataFetcher:
         market_map: dict = None,
     ) -> pd.DataFrame:
         """Fetch daily OHLCV history via yfinance (Yahoo Finance).
-        market_map: {stock_id: "OTC"} for 上櫃 stocks → uses .TWO suffix; others use .TW."""
+        market_map: {stock_id: "OTC"} for 上櫃 stocks → uses .TWO suffix; others use .TW.
+        Tickers silently dropped by the batch download are retried one-by-one."""
         import yfinance as yf
         from datetime import datetime, timedelta
 
@@ -176,10 +177,45 @@ class DataFetcher:
             print(f"  yfinance error: {e}")
             return pd.DataFrame()
 
-        if raw.empty:
+        parsed = self._parse_yf_download(raw, tickers, ticker_to_sid)
+
+        # Retry stocks the batch silently dropped (Yahoo intermittently returns
+        # NaN-only columns for some tickers in multi-ticker downloads).
+        got_sids = set(parsed["stock_id"]) if not parsed.empty else set()
+        missing = [sid for sid in stock_ids if sid not in got_sids]
+        if missing:
+            print(f"  yfinance batch missed {len(missing)} stocks, retrying individually: {missing}")
+            retry_frames = []
+            for sid in missing:
+                ticker = next(t for t, s in ticker_to_sid.items() if s == sid)
+                try:
+                    raw_one = yf.download(ticker, start=start_date, end=end_dt,
+                                          auto_adjust=True, progress=False)
+                except Exception as e:
+                    print(f"    {sid} retry failed: {e}")
+                    continue
+                one = self._parse_yf_download(raw_one, [ticker], {ticker: sid})
+                if not one.empty:
+                    retry_frames.append(one)
+            if retry_frames:
+                recovered = sum(f["stock_id"].nunique() for f in retry_frames)
+                parsed = pd.concat([parsed] + retry_frames, ignore_index=True)
+                print(f"  yfinance recovered {recovered}/{len(missing)} stocks via retry")
+
+        if parsed.empty:
             return pd.DataFrame()
 
-        # Reshape to long format: (date, ticker, OHLCV)
+        return (
+            parsed[["stock_id", "date", "open", "max", "min", "close", "Trading_Volume"]]
+            .sort_values(["stock_id", "date"])
+            .reset_index(drop=True)
+        )
+
+    def _parse_yf_download(self, raw, tickers: list, ticker_to_sid: dict) -> pd.DataFrame:
+        """Reshape a yfinance download result to long format and clean types."""
+        if raw is None or raw.empty:
+            return pd.DataFrame()
+
         if isinstance(raw.columns, pd.MultiIndex):
             try:
                 stacked = raw.stack(level="Ticker").reset_index()
@@ -208,12 +244,7 @@ class DataFetcher:
         stacked = stacked.dropna(subset=["stock_id", "open", "close", "max", "min"])
         # Convert shares → lots (張)
         stacked["Trading_Volume"] = (stacked["Trading_Volume"] / 1000).round(0)
-
-        return (
-            stacked[["stock_id", "date", "open", "max", "min", "close", "Trading_Volume"]]
-            .sort_values(["stock_id", "date"])
-            .reset_index(drop=True)
-        )
+        return stacked
 
     # ── Step 3: institutional buy/sell (TWSE T86, no auth) ───────────────────
 
