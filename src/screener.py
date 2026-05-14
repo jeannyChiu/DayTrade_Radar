@@ -159,7 +159,7 @@ class Screener:
         """突破糾結均線: MAs tangled (spread ≤ 3%) yesterday, today breaks above all
         three MAs with ≥ 4% gain, AND yesterday's close was near the MA band:
           (a) ≤ 1.5% above the band's min MA → fresh breakout from below, or
-          (b) ≤ 5% above the band's max MA AND tanglement (≤ 2%) sustained for
+          (b) ≤ 3% above the band's max MA AND tanglement (≤ 2%) sustained for
               ≥ 2 of the most recent days → near-band continuation breakout.
         The streak check on (b) filters out single-day borderline tanglement
         where MAs only just converged the day before today's gain."""
@@ -202,7 +202,7 @@ class Screener:
             return True
 
         # (b) near-band continuation: yesterday's close still close to the band
-        if prev_close > prev_max_ma * 1.05:
+        if prev_close > prev_max_ma * 1.03:
             return False
 
         # (b) prerequisite: sustained tangling (≤ 2%) for ≥ 2 consecutive days
