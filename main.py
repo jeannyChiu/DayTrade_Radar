@@ -79,6 +79,16 @@ def main():
     today_str = price_df["date"].max().strftime("%Y-%m-%d")
     print(f"      Latest trading date: {today_str}")
 
+    # yfinance only reports 盤中一般交易 volume — miss 盤後定價. Override today's
+    # row with the TWSE/TPEx EOD figure (matches what 三竹 / brokers display).
+    today_dt = price_df["date"].max()
+    vol_override = today_df.set_index("stock_id")["Trading_Volume"]
+    mask = price_df["date"] == today_dt
+    price_df.loc[mask, "Trading_Volume"] = (
+        price_df.loc[mask, "stock_id"].map(vol_override)
+        .fillna(price_df.loc[mask, "Trading_Volume"])
+    )
+
     # ── 4. Institutional investor data ─────────────────────────────────────────
     print("[4/7] Fetching institutional investor data ...")
     institutional_df = fetcher.get_institutional_data(today_str)
