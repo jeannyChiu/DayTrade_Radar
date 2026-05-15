@@ -78,7 +78,9 @@ class DataFetcher:
 
     def get_today_otc_stocks(self) -> pd.DataFrame:
         """All OTC (上櫃) stocks for the most recent trading day from TPEx.
-        TPEx uses ROC calendar (year - 1911) in the date parameter."""
+        TPEx uses ROC calendar (year - 1911) in the date parameter.
+        Uses daily_close_quotes (full EOD) instead of the 14:30 snapshot —
+        the latter misses 盤後定價 trades and undercounts volume."""
         from datetime import datetime, timedelta
 
         for days_back in range(7):
@@ -89,7 +91,7 @@ class DataFetcher:
             try:
                 resp = self.session.get(
                     "https://www.tpex.org.tw/web/stock/aftertrading/"
-                    "otc_quotes_no1430/stk_wn1430_result.php",
+                    "daily_close_quotes/stk_quote_result.php",
                     params={"l": "zh-tw", "o": "json", "d": roc_date, "se": "AL"},
                     timeout=20,
                 )
