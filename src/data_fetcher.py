@@ -26,14 +26,23 @@ class DataFetcher:
             if date.weekday() >= 5:   # skip weekends
                 continue
             date_str = date.strftime("%Y%m%d")
-            resp = self.session.get(
-                TWSE_DAY_ALL,
-                params={"response": "json", "date": date_str},
-                timeout=20,
-            )
+            try:
+                resp = self.session.get(
+                    TWSE_DAY_ALL,
+                    params={"response": "json", "date": date_str},
+                    timeout=20,
+                )
+            except requests.RequestException as e:
+                print(f"  TWSE snapshot fetch error ({date_str}): {e}")
+                continue
             if resp.status_code != 200:
                 continue
-            body = resp.json()
+            try:
+                body = resp.json()
+            except ValueError:
+                # 非 JSON 回應 (e.g. TWSE 維護中回 HTML 維護頁) → 跳下一天
+                print(f"  TWSE snapshot non-JSON response ({date_str}); maintenance? retrying earlier date")
+                continue
             if body.get("stat") != "OK" or not body.get("data"):
                 continue
             print(f"  TWSE snapshot date: {date.strftime('%Y-%m-%d')}")
