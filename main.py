@@ -112,6 +112,30 @@ def main():
     p1, p2 = len(results["p1"]), len(results["p2"])
     print(f"      Found: P1={p1}, P2={p2}")
 
+    # ── 6b. FinMind cross-check: 補位 primary T86/TPEx 漏列或全 0 的結果股 ──
+    # 只針對 P1/P2 結果中「沒帶任何法人標籤」的個股逐檔補查 (一天 < 20 次呼叫)
+    INST_LABELS = ("外資買超", "投信買超", "自營商買超")
+    missing = [
+        r for r in results["p1"] + results["p2"]
+        if not any(lbl in r.conditions for lbl in INST_LABELS)
+    ]
+    if missing:
+        print(f"      Cross-checking {len(missing)} result(s) without inst labels via FinMind ...")
+        for r in missing:
+            fm = fetcher.get_finmind_institutional_one(today_str, r.stock_id)
+            if not fm:
+                continue
+            added = []
+            if fm.get("foreign_net", 0) >= 1000:
+                added.append("外資買超")
+            if fm.get("trust_net", 0) >= 1000:
+                added.append("投信買超")
+            if fm.get("dealer_net", 0) >= 1000:
+                added.append("自營商買超")
+            if added:
+                r.conditions.extend(added)
+                print(f"        {r.stock_id} {r.name}: +{','.join(added)} (from FinMind)")
+
     # ── 7. Intraday charts + sector + HTML report + LINE notification ──────────
     print("[7/7] Building HTML report ...")
     selected = [r.stock_id for r in results["p1"]] + [r.stock_id for r in results["p2"]]

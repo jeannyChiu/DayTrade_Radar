@@ -4,6 +4,7 @@ import pandas as pd
 
 TWSE_DAY_ALL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL"
 TWSE_T86 = "https://www.twse.com.tw/rwd/zh/fund/T86"
+FINMIND_API = "https://api.finmindtrade.com/api/v4/data"
 
 
 class DataFetcher:
@@ -370,6 +371,51 @@ class DataFetcher:
         except Exception as e:
             print(f"  Warning: OTC institutional data unavailable ({e})")
             return pd.DataFrame()
+
+    def get_finmind_institutional_one(self, date: str, stock_id: str) -> dict:
+        """Per-stock FinMind 三大法人 fallback. anonymous tier 允許單檔查詢
+        (bulk 需要付費)，因此設計成「primary 抓不到該檔，再 1 檔 1 檔補」.
+        回傳 {'foreign_net', 'trust_net', 'dealer_net', 'net'}, 找不到回 {}."""
+        import os
+        params = {
+            "dataset": "TaiwanStockInstitutionalInvestorsBuySell",
+            "data_id": stock_id,
+            "start_date": date,
+            "end_date": date,
+        }
+        token = os.environ.get("FINMIND_TOKEN", "")
+        if token:
+            params["token"] = token
+        try:
+            resp = self.session.get(FINMIND_API, params=params, timeout=20)
+            if resp.status_code != 200:
+                return {}
+            body = resp.json()
+            if body.get("status") != 200:
+                return {}
+            rows = body.get("data", [])
+            if not rows:
+                return {}
+
+            nets = {"Foreign_Investor": 0, "Foreign_Dealer_Self": 0,
+                    "Investment_Trust": 0, "Dealer_self": 0, "Dealer_Hedging": 0}
+            for r in rows:
+                name = r.get("name")
+                if name in nets:
+                    nets[name] += int(r.get("buy", 0) or 0) - int(r.get("sell", 0) or 0)
+
+            foreign_net = nets["Foreign_Investor"] + nets["Foreign_Dealer_Self"]
+            trust_net   = nets["Investment_Trust"]
+            dealer_net  = nets["Dealer_self"] + nets["Dealer_Hedging"]
+            return {
+                "foreign_net": foreign_net,
+                "trust_net":   trust_net,
+                "dealer_net":  dealer_net,
+                "net":         foreign_net + trust_net + dealer_net,
+            }
+        except Exception as e:
+            print(f"  Warning: FinMind fallback failed for {stock_id} ({e})")
+            return {}
 
     # ── Step 3b: industry/sector map (TWSE ISIN pages) ───────────────────────
 
