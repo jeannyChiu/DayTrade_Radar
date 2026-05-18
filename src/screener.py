@@ -156,7 +156,7 @@ class Screener:
         return True
 
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
-        """突破糾結均線: MAs tangled (spread ≤ 3%) yesterday, today breaks above all
+        """突破糾結均線: MAs tangled (spread ≤ 2%) yesterday, today breaks above all
         three MAs with ≥ 4% gain, AND yesterday's close was near the MA band:
           (a) ≤ 1.5% above the band's min MA → fresh breakout from below, or
           (b) ≤ 3% above the band's max MA AND tanglement (≤ 2%) sustained for
@@ -173,12 +173,12 @@ class Screener:
         if pd.isna(ma20.iloc[-2]):
             return False
 
-        # Yesterday's MAs must be tangled (spread ≤ 3%)
+        # Yesterday's MAs must be tangled (spread ≤ 2%)
         ma_prev = [ma5.iloc[-2], ma10.iloc[-2], ma20.iloc[-2]]
         if any(pd.isna(v) for v in ma_prev):
             return False
         spread = (max(ma_prev) - min(ma_prev)) / min(ma_prev)
-        if spread > 0.03:
+        if spread > 0.02:
             return False
 
         today_close = closes.iloc[-1]
