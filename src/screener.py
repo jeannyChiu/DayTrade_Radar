@@ -147,7 +147,8 @@ class Screener:
         today = g.iloc[-1]
         prev3 = g.iloc[-4:-1]
 
-        if today["close"] <= today["open"]:          # not a red K
+        # close >= open allows 漲停一字/T字 (body=0 but visually red 漲停)
+        if today["close"] < today["open"]:           # not a red K
             return False
         if not (prev3["close"] < prev3["open"]).all():  # not all black K
             return False
@@ -156,10 +157,10 @@ class Screener:
         return True
 
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
-        """突破糾結均線: MAs tangled (spread ≤ 2%) yesterday, today breaks above all
+        """突破糾結均線: MAs tangled (spread ≤ 2.5%) yesterday, today breaks above all
         three MAs with ≥ 4% gain, AND yesterday's close was near the MA band:
           (a) ≤ 1.5% above the band's min MA → fresh breakout from below, or
-          (b) ≤ 3% above the band's max MA AND tanglement (≤ 2%) sustained for
+          (b) at/below max MA AND tanglement (≤ 2%) sustained for
               ≥ 2 of the most recent days → near-band continuation breakout.
         The streak check on (b) filters out single-day borderline tanglement
         where MAs only just converged the day before today's gain."""
@@ -173,12 +174,12 @@ class Screener:
         if pd.isna(ma20.iloc[-2]):
             return False
 
-        # Yesterday's MAs must be tangled (spread ≤ 2%)
+        # Yesterday's MAs must be tangled (spread ≤ 2.5%)
         ma_prev = [ma5.iloc[-2], ma10.iloc[-2], ma20.iloc[-2]]
         if any(pd.isna(v) for v in ma_prev):
             return False
         spread = (max(ma_prev) - min(ma_prev)) / min(ma_prev)
-        if spread > 0.02:
+        if spread > 0.025:
             return False
 
         today_close = closes.iloc[-1]
@@ -201,8 +202,10 @@ class Screener:
         if prev_close <= prev_min_ma * 1.015:
             return True
 
-        # (b) near-band continuation: yesterday's close still close to the band
-        if prev_close > prev_max_ma * 1.03:
+        # (b) near-band continuation: yesterday's close must still be inside
+        # the band (≤ max MA). Above the band = already broken out — not a
+        # fresh-breakout signal.
+        if prev_close > prev_max_ma:
             return False
 
         # (b) prerequisite: sustained tangling (≤ 2%) for ≥ 2 consecutive days
