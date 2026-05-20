@@ -158,10 +158,17 @@ class Screener:
 
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
         """突破糾結均線: MAs tangled (spread ≤ 2.5%) yesterday, today breaks above all
-        three MAs with ≥ 4% gain, AND yesterday's close was near the MA band:
-          (a) ≤ 1.5% above the band's min MA → fresh breakout from below, or
+        three MAs with ≥ 4% gain, AND yesterday's close fits one of:
+          (a) within ±1.5% of the band's min MA → classic band-proximity breakout, or
+          (a') spread ≤ 1.5% (very tight tangle) AND prev_close ≤ min_MA*1.015 →
+              MAs are genuinely clustered, allow prev_close further below the band, or
           (b) at/below max MA AND tanglement (≤ 2%) sustained for
               ≥ 2 of the most recent days → near-band continuation breakout.
+        cond (a)'s lower bound on prev_close filters cases like 2603 (5/20) where
+        a 3-day plunge dragged price 3% below the band — MAs only appear tangled
+        because they're slow to catch up; the recovery is a 一紅吃三黑 reversal,
+        not a true band breakout. cond (a') keeps real tight-tangle bounces
+        (e.g. 3169, spread 1.42%) from being incorrectly excluded.
         The streak check on (b) filters out single-day borderline tanglement
         where MAs only just converged the day before today's gain."""
         if len(g) < 21:
@@ -198,8 +205,14 @@ class Screener:
         prev_min_ma = min(ma_prev)
         prev_max_ma = max(ma_prev)
 
-        # (a) fresh breakout: yesterday's close at or below the band
-        if prev_close <= prev_min_ma * 1.015:
+        # (a) classic band-proximity breakout: prev_close within ±1.5% of min_MA
+        if prev_min_ma * 0.985 <= prev_close <= prev_min_ma * 1.015:
+            return True
+
+        # (a') very tight tangle: spread ≤ 1.5% means MAs are genuinely clustered,
+        # so allow prev_close further below the band (e.g. 3169 with spread 1.42%
+        # and prev_close 4.5% below min_MA — still a real tangle-break).
+        if spread <= 0.015 and prev_close <= prev_min_ma * 1.015:
             return True
 
         # (b) near-band continuation: yesterday's close must still be inside
