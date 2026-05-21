@@ -158,8 +158,13 @@ class Screener:
 
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
         """突破糾結均線: today breaks above all three MAs with ≥ 4% gain, AND one of:
-          (a) prev_spread ≤ 2.5% AND prev_close within [min_MA, min_MA*1.015] →
-              classic band-proximity breakout, or
+          (a) prev_spread ≤ 2.5% AND prev_close ∈ [dyn_low, min_MA*1.015], where
+              dyn_low = min_MA*0.985 if today's MAs are already tight (≤ 2%) else
+              min_MA → classic band-proximity breakout (the dynamic lower bound
+              keeps cases like 5243 5/21 where prev_close is 0.85% below min_MA
+              but today_spread collapsed to 1.56% — a real tangle-break — while
+              still rejecting 1513 5/21 where prev_close is 1% below min_MA AND
+              today_spread is still 2.03%, i.e. a bounce-from-below), or
           (a') prev_spread ≤ 1.5% (very tight tangle) AND prev_close ≤ min_MA*1.015 →
               MAs are genuinely clustered, allow prev_close further below the band, or
           (b) prev_spread ≤ 2.5% AND prev_close ≤ max_MA AND tanglement (≤ 2%)
@@ -169,10 +174,6 @@ class Screener:
               at or above min_MA → convergence-driven breakout (e.g. 6862/3042/3708
               5/21 where MAs were still in 空頭排列 spread 2.8~4.5% but today's
               red K collapsed the band to ~1~2%).
-        cond (a)'s lower bound (prev_close ≥ min_MA) excludes cases like 2603 (5/20)
-        and 1513 (5/21) where prev_close sat 1~3% below the band — a bounce-from-
-        below, not a true band breakout. cond (a') keeps real tight-tangle bounces
-        (e.g. 3169, spread 1.42%) from being incorrectly excluded.
         The streak check on (b) filters out single-day borderline tanglement
         where MAs only just converged the day before today's gain.
         cond (c) requires prev_close ≥ min_MA so post-plunge bounces (where MAs
@@ -222,8 +223,13 @@ class Screener:
         if prev_spread > 0.025:
             return False
 
-        # (a) classic band-proximity breakout: prev_close inside the band, near min_MA
-        if prev_min_ma <= prev_close <= prev_min_ma * 1.015:
+        # (a) classic band-proximity breakout: prev_close near min_MA.
+        # Lower bound is dynamic — if today's MAs are already tight (≤ 2%),
+        # we accept prev_close slightly below the band (real tangle-break in
+        # progress); otherwise prev_close must sit at/above min_MA (bounce-
+        # from-below rejected).
+        dyn_low = prev_min_ma * 0.985 if today_spread <= 0.02 else prev_min_ma
+        if dyn_low <= prev_close <= prev_min_ma * 1.015:
             return True
 
         # (a') very tight tangle: spread ≤ 1.5% means MAs are genuinely clustered,
