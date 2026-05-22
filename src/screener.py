@@ -173,7 +173,13 @@ class Screener:
               spread shrank to ≤ 70% of yesterday's, AND prev_close was already
               at or above min_MA → convergence-driven breakout (e.g. 6862/3042/3708
               5/21 where MAs were still in 空頭排列 spread 2.8~4.5% but today's
-              red K collapsed the band to ~1~2%).
+              red K collapsed the band to ~1~2%), or
+          (d) prev_spread ≤ 2.5% AND prev_close ∈ [min_MA, max_MA*1.02] AND
+              today_spread ≤ 2% → V-reversal continuation: yesterday's MAs were
+              already tangled and yesterday's reversal K just stood on top of
+              the band, today's continuation gain is still a fresh tangle-break
+              (e.g. 8039/1773 5/22 where 5/18-20 plunged into the tangle, 5/21's
+              red K closed just above max_MA, 5/22 followed with another ≥4% gain).
         The streak check on (b) filters out single-day borderline tanglement
         where MAs only just converged the day before today's gain.
         cond (c) requires prev_close ≥ min_MA so post-plunge bounces (where MAs
@@ -236,6 +242,18 @@ class Screener:
         # so allow prev_close further below the band (e.g. 3169 with spread 1.42%
         # and prev_close 4.5% below min_MA — still a real tangle-break).
         if prev_spread <= 0.015 and prev_close <= prev_min_ma * 1.015:
+            return True
+
+        # (d) V-reversal continuation: yesterday's MAs already tangled and
+        # yesterday's K just stood on top of the band (prev_close within
+        # +2% of max_MA), and today's MAs are still tangled. Catches the
+        # "plunge → reversal day → continuation gain" pattern where (a)/(b)
+        # all fail because prev_close already cleared max_MA (e.g. 8039/1773
+        # 5/22 — 5/21 reversal red K closed just above max_MA, 5/22 followed
+        # with another ≥4% gain). today_spread ≤ 2% guards against cases
+        # where MAs have already diverged.
+        if (prev_min_ma <= prev_close <= prev_max_ma * 1.02
+                and today_spread <= 0.02):
             return True
 
         # (b) near-band continuation: yesterday's close must still be inside
