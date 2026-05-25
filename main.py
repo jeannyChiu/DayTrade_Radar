@@ -43,8 +43,10 @@ def main():
     today_df.loc[today_df["prev_close"] <= 0, "prev_close"] = today_df["close"]
     today_df["change_pct"] = today_df["spread"].fillna(0) / today_df["prev_close"]
 
-    # Full-market rankings (before price filter) — used inside screener
-    top100_change = set(today_df.nlargest(100, "change_pct")["stock_id"])
+    # Volume ranking is reliable from the TWSE/TPEx snapshot.
+    # Change-pct ranking is recomputed after yfinance fetch (see below) because
+    # TWSE marks 除權息 days with an 'X' flag that the parser nulls out, which
+    # would otherwise push affected stocks out of the top-100 漲幅 ranking.
     top100_volume = set(today_df.nlargest(100, "Trading_Volume")["stock_id"])
 
     # Filter to 100–500 NTD, no limit-down
@@ -88,6 +90,19 @@ def main():
         price_df.loc[mask, "stock_id"].map(vol_override)
         .fillna(price_df.loc[mask, "Trading_Volume"])
     )
+
+    # Top-100 漲幅 ranking — use yfinance prev_close (handles 除權息 X-flag rows
+    # that the TWSE snapshot reports as spread=0; e.g. 2486 一詮 on 2026-05-25).
+    prev_close_yf = (
+        price_df[price_df["date"] < today_dt]
+        .sort_values("date").groupby("stock_id")["close"].last()
+    )
+    close_today_yf = (
+        price_df[price_df["date"] == today_dt]
+        .set_index("stock_id")["close"]
+    )
+    yf_change_pct = ((close_today_yf - prev_close_yf) / prev_close_yf).dropna()
+    top100_change = set(yf_change_pct.nlargest(100).index)
 
     # ── 4. Institutional investor data ─────────────────────────────────────────
     print("[4/7] Fetching institutional investor data ...")
