@@ -179,9 +179,15 @@ def main():
     shutil.copy(dated_path, "docs/index.html")
     print(f"      HTML saved ({today_str}.html + index.html)")
 
+    # Report generation already succeeded above; a notification failure
+    # (e.g. LINE 429 monthly-limit) must not fail the whole pipeline, or the
+    # later "Deploy to GitHub Pages" step never runs and the site goes stale.
     notifier = LineNotifier(token=line_token)
-    notifier.send_report(results, today_str)
-    print("Report sent via LINE.")
+    try:
+        notifier.send_report(results, today_str)
+        print("Report sent via LINE.")
+    except Exception as e:
+        print(f"WARNING: LINE notification failed, report still generated: {e}")
 
 
 if __name__ == "__main__":
