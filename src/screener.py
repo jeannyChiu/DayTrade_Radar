@@ -180,6 +180,12 @@ class Screener:
               the band, today's continuation gain is still a fresh tangle-break
               (e.g. 8039/1773 5/22 where 5/18-20 plunged into the tangle, 5/21's
               red K closed just above max_MA, 5/22 followed with another ≥4% gain).
+          (e) prev_spread <= 1.5% AND today_spread <= 2.5% AND prev_close <=
+              max_MA*1.05 -> tight-cluster continuation breakout, the upper-side
+              counterpart of (a'): price already edged just above a still-tangled
+              MA cluster over the prior 1-2 days, then a >=4% break (e.g. 3402
+              漢科 5/26, prev_close 4.2% above a 0.42%-wide cluster, so (a)/(a')/
+              (b)/(d) all reject it as already-broken-out).
         The streak check on (b) filters out single-day borderline tanglement
         where MAs only just converged the day before today's gain.
         cond (c) requires prev_close ≥ min_MA so post-plunge bounces (where MAs
@@ -242,6 +248,18 @@ class Screener:
         # so allow prev_close further below the band (e.g. 3169 with spread 1.42%
         # and prev_close 4.5% below min_MA — still a real tangle-break).
         if prev_spread <= 0.015 and prev_close <= prev_min_ma * 1.015:
+            return True
+
+        # (e) tight-cluster continuation breakout — symmetric to (a') on the
+        # upper side. The MA cluster is genuinely tangled (prev_spread ≤ 1.5%)
+        # and still tight today (≤ 2.5%), but price had already edged just above
+        # the band over the prior 1-2 days, so (a)/(a')/(b)/(d) all reject it as
+        # "already broken out". When the cluster is this tight, today's ≥ 4%
+        # break above all MAs is still a fresh tangle-break (e.g. 3402 漢科 5/26:
+        # 5/21-25 climbed to ~4.2% above a 0.42%-wide MA cluster, then 5/26
+        # +7.69%). Bounded to prev_close ≤ max_MA*1.05 so already-extended trends
+        # — where the MAs would have spread out past the threshold — can't slip in.
+        if prev_spread <= 0.015 and today_spread <= 0.025 and prev_close <= prev_max_ma * 1.05:
             return True
 
         # (d) V-reversal continuation: yesterday's MAs already tangled and
