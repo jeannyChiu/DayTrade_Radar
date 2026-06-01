@@ -158,38 +158,49 @@ class Screener:
 
     def _breakout_tangled_ma(self, g: pd.DataFrame) -> bool:
         """突破糾結均線: today breaks above all three MAs with ≥ 4% gain, AND one of:
-          (a) prev_spread ≤ 2.5% AND prev_close ∈ [dyn_low, min_MA*1.015], where
+          (a) prev_spread ≤ 2.5% AND prev_close ∈ [dyn_low, min_MA*1.010], where
               dyn_low = min_MA*0.985 if today's MAs are already tight (≤ 2%) else
               min_MA → classic band-proximity breakout (the dynamic lower bound
               keeps cases like 5243 5/21 where prev_close is 0.85% below min_MA
               but today_spread collapsed to 1.56% — a real tangle-break — while
               still rejecting 1513 5/21 where prev_close is 1% below min_MA AND
-              today_spread is still 2.03%, i.e. a bounce-from-below), or
+              today_spread is still 2.03%, i.e. a bounce-from-below; upper bound
+              tightened to +1.0% on 6/01 to reject 7768 where prev_close was
+              +1.23% above min_MA on stick-thin volume — 三竹 didn't include
+              it), or
           (a') prev_spread ≤ 1.5% (very tight tangle) AND prev_close ≤ min_MA*1.015 →
               MAs are genuinely clustered, allow prev_close further below the band, or
           (b) prev_spread ≤ 2.5% AND prev_close ≤ max_MA AND tanglement (≤ 2%)
               sustained for ≥ 2 days → near-band continuation breakout, or
           (c) today's K pulled MAs into a tight band (today_spread ≤ 2%) and that
-              spread shrank to ≤ 70% of yesterday's, AND prev_close was already
-              at or above min_MA → convergence-driven breakout (e.g. 6862/3042/3708
-              5/21 where MAs were still in 空頭排列 spread 2.8~4.5% but today's
-              red K collapsed the band to ~1~2%), or
+              spread shrank to ≤ 80% of yesterday's, AND prev_close ≥ min_MA*0.97 →
+              convergence-driven breakout (e.g. 6862/3042/3708 5/21 where MAs
+              were still in 空頭排列 spread 2.8~4.5% but today's red K collapsed
+              the band to ~1~2%). The −3% slack on prev_close (relaxed from
+              ≥ min_MA on 6/01) catches 3535/3376 6/01 where four consecutive
+              black Ks punched price 1.9~2.0% below min_MA before today's
+              recovery; ratio bumped from 70% → 80% so 3376's 0.74x convergence
+              still qualifies, while 8932 5/14 (no convergence: 2.14% > 1.33%)
+              and 7768 6/01 (today_spread 2.26% > 2%) remain rejected.
           (d) prev_spread ≤ 2.5% AND prev_close ∈ [min_MA, max_MA*1.02] AND
               today_spread ≤ 2% → V-reversal continuation: yesterday's MAs were
               already tangled and yesterday's reversal K just stood on top of
               the band, today's continuation gain is still a fresh tangle-break
               (e.g. 8039/1773 5/22 where 5/18-20 plunged into the tangle, 5/21's
               red K closed just above max_MA, 5/22 followed with another ≥4% gain).
-          (e) prev_spread <= 1.5% AND today_spread <= 2.5% AND prev_close <=
-              max_MA*1.05 -> tight-cluster continuation breakout, the upper-side
-              counterpart of (a'): price already edged just above a still-tangled
-              MA cluster over the prior 1-2 days, then a >=4% break (e.g. 3402
-              漢科 5/26, prev_close 4.2% above a 0.42%-wide cluster, so (a)/(a')/
-              (b)/(d) all reject it as already-broken-out).
+          (e) prev_spread ≤ 2.0% AND today_spread ≤ 2.0% AND prev_close ∈
+              [max_MA*1.02, max_MA*1.05] → tight-cluster continuation breakout,
+              the upper-side counterpart of (a'): price has clearly cleared a
+              still-tangled MA cluster over the prior 1-2 days, then a >=4%
+              break (3402 漢科 5/26 prev_close +4.17% above a 0.42% cluster;
+              3004 5/18 prev_close +2.54% above a 1.64% cluster). Reworked on
+              6/01: today_spread tightened 2.5% → 2% blocks 4953 (1.17% → 2.16%
+              spread expansion) and 8932 5/14 (1.33% → 2.14%); new lower bound
+              prev_close ≥ max_MA*1.02 blocks 4953 (+0.82% above max_MA — barely
+              cleared the cluster, not the intended "already broken out and
+              held" pattern); prev_spread relaxed 1.5% → 2.0% to capture 3004.
         The streak check on (b) filters out single-day borderline tanglement
-        where MAs only just converged the day before today's gain.
-        cond (c) requires prev_close ≥ min_MA so post-plunge bounces (where MAs
-        haven't caught up yet) don't slip through via today's mechanical convergence."""
+        where MAs only just converged the day before today's gain."""
         if len(g) < 21:
             return False
         closes = g["close"]
@@ -226,9 +237,14 @@ class Screener:
         # (c) convergence-driven breakout: today's K collapsed the MA spread.
         # Independent of yesterday's spread — allows cases where MAs were still
         # in 空頭排列 yesterday but today's gain pulled them into a tight band.
+        # The −3% slack on prev_close (vs strict ≥ min_MA) is needed for cases
+        # like 3535/3376 6/01 where consecutive black Ks pushed prev_close
+        # ~2% below min_MA before today's V-recovery — still a real tangle
+        # break, not a mechanical-convergence artifact, because MAs were
+        # genuinely converging on their own (prev_spread already ≤ 2.5~3%).
         if (today_spread <= 0.02
-                and today_spread <= prev_spread * 0.70
-                and prev_close >= prev_min_ma):
+                and today_spread <= prev_spread * 0.80
+                and prev_close >= prev_min_ma * 0.97):
             return True
 
         # The remaining (a)/(a')/(b) paths require yesterday's MAs to already be tangled.
@@ -239,9 +255,10 @@ class Screener:
         # Lower bound is dynamic — if today's MAs are already tight (≤ 2%),
         # we accept prev_close slightly below the band (real tangle-break in
         # progress); otherwise prev_close must sit at/above min_MA (bounce-
-        # from-below rejected).
+        # from-below rejected). Upper bound tightened to +1.0% on 6/01 to
+        # reject 7768 (prev_close +1.23% above min_MA on stick-thin volume).
         dyn_low = prev_min_ma * 0.985 if today_spread <= 0.02 else prev_min_ma
-        if dyn_low <= prev_close <= prev_min_ma * 1.015:
+        if dyn_low <= prev_close <= prev_min_ma * 1.010:
             return True
 
         # (a') very tight tangle: spread ≤ 1.5% means MAs are genuinely clustered,
@@ -251,15 +268,21 @@ class Screener:
             return True
 
         # (e) tight-cluster continuation breakout — symmetric to (a') on the
-        # upper side. The MA cluster is genuinely tangled (prev_spread ≤ 1.5%)
-        # and still tight today (≤ 2.5%), but price had already edged just above
-        # the band over the prior 1-2 days, so (a)/(a')/(b)/(d) all reject it as
-        # "already broken out". When the cluster is this tight, today's ≥ 4%
-        # break above all MAs is still a fresh tangle-break (e.g. 3402 漢科 5/26:
-        # 5/21-25 climbed to ~4.2% above a 0.42%-wide MA cluster, then 5/26
-        # +7.69%). Bounded to prev_close ≤ max_MA*1.05 so already-extended trends
-        # — where the MAs would have spread out past the threshold — can't slip in.
-        if prev_spread <= 0.015 and today_spread <= 0.025 and prev_close <= prev_max_ma * 1.05:
+        # upper side. The MA cluster is genuinely tangled and still tight today
+        # (≤ 2%), and price has clearly cleared the band over the prior 1-2
+        # days, so (a)/(a')/(b)/(d) all reject it as "already broken out". When
+        # the cluster stays this tight, today's ≥ 4% break above all MAs is
+        # still a fresh tangle-break (3402 漢科 5/26: 5/21-25 climbed to +4.17%
+        # above a 0.42% cluster, then 5/26 +7.69%; 3004 5/18 +2.54% above a
+        # 1.64% cluster, then +9.92%). The lower bound prev_close ≥ max_MA*1.02
+        # (added 6/01) rejects 4953 6/01 where prev_close was only +0.82% above
+        # max_MA — barely cleared the cluster, not the intended "already broken
+        # out and held" pattern. today_spread ≤ 2% (tightened from 2.5%) blocks
+        # 4953 (spread expanded 1.17% → 2.16%) and 8932 5/14 (1.33% → 2.14%) —
+        # the MAs were already starting to fan out, not still tangled.
+        if (prev_spread <= 0.020
+                and today_spread <= 0.020
+                and 1.02 * prev_max_ma <= prev_close <= 1.05 * prev_max_ma):
             return True
 
         # (d) V-reversal continuation: yesterday's MAs already tangled and
