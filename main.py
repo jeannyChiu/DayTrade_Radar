@@ -84,12 +84,40 @@ def main():
     # yfinance only reports 盤中一般交易 volume — miss 盤後定價. Override today's
     # row with the TWSE/TPEx EOD figure (matches what 三竹 / brokers display).
     today_dt = price_df["date"].max()
-    vol_override = today_df.set_index("stock_id")["Trading_Volume"]
+    eod = today_df.drop_duplicates(subset="stock_id").set_index("stock_id")
     mask = price_df["date"] == today_dt
     price_df.loc[mask, "Trading_Volume"] = (
-        price_df.loc[mask, "stock_id"].map(vol_override)
+        price_df.loc[mask, "stock_id"].map(eod["Trading_Volume"])
         .fillna(price_df.loc[mask, "Trading_Volume"])
     )
+
+    # yfinance intermittently lags today's daily bar for some symbols. The
+    # batch-retry in get_stock_history only recovers tickers that returned NO
+    # rows at all — a stock that returned history but is missing *today's* bar
+    # slips through. Both the 漲幅前百 ranking (close_today_yf below) and the
+    # screener key off rows dated today_dt, so a missing today-bar silently drops
+    # the stock from selection even though the authoritative TWSE/TPEx EOD
+    # snapshot already has it (e.g. 2492 華新科 6/02: +9.62%, 外資買超, ranked #9
+    # market-wide, yet absent from the report). Inject today's EOD bar from the
+    # snapshot for any candidate that has prior history but no today-bar.
+    have_today = set(price_df.loc[mask, "stock_id"])
+    have_hist  = set(price_df["stock_id"])
+    inject_ids = [
+        s for s in candidates
+        if s not in have_today and s in have_hist and s in eod.index
+    ]
+    if inject_ids:
+        inject = (
+            eod.loc[inject_ids, ["open", "max", "min", "close", "Trading_Volume"]]
+            .reset_index()  # index name is stock_id
+        )
+        inject["date"] = today_dt
+        price_df = (
+            pd.concat([price_df, inject], ignore_index=True)
+            .sort_values(["stock_id", "date"])
+            .reset_index(drop=True)
+        )
+        print(f"      injected {len(inject)} today-bars from EOD snapshot (yfinance lag)")
 
     # Top-100 漲幅 ranking — use yfinance prev_close (handles 除權息 X-flag rows
     # that the TWSE snapshot reports as spread=0; e.g. 2486 一詮 on 2026-05-25).
