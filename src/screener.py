@@ -173,15 +173,21 @@ class Screener:
           (b) prev_spread ≤ 2.5% AND prev_close ≤ max_MA AND tanglement (≤ 2%)
               sustained for ≥ 2 days → near-band continuation breakout, or
           (c) today's K pulled MAs into a tight band (today_spread ≤ 2%) and that
-              spread shrank to ≤ 80% of yesterday's, AND prev_close ≥ min_MA*0.97 →
+              spread shrank to ≤ 80% of yesterday's, AND prev_close ≥ min_MA*0.95 →
               convergence-driven breakout (e.g. 6862/3042/3708 5/21 where MAs
               were still in 空頭排列 spread 2.8~4.5% but today's red K collapsed
-              the band to ~1~2%). The −3% slack on prev_close (relaxed from
-              ≥ min_MA on 6/01) catches 3535/3376 6/01 where four consecutive
-              black Ks punched price 1.9~2.0% below min_MA before today's
-              recovery; ratio bumped from 70% → 80% so 3376's 0.74x convergence
-              still qualifies, while 8932 5/14 (no convergence: 2.14% > 1.33%)
-              and 7768 6/01 (today_spread 2.26% > 2%) remain rejected.
+              the band to ~1~2%). The −5% slack on prev_close (relaxed from
+              ≥ min_MA on 6/01 → −3%, then → −5% on 6/03) catches deep V-recovery
+              tangle-breaks: 3535/3376 6/01 (price 1.9~2.0% below min_MA) and
+              3264 欣銓 6/03 where 5/29→6/02 three black Ks plunged prev_close
+              4.58% below an already-tight band (prev_spread 1.96%) before today's
+              +6.99% recovery collapsed today_spread to 1.11% (0.57x convergence).
+              3264 fell in the gap between (a') — which has no lower bound but
+              demands prev_spread ≤ 1.5% (3264's was 1.96%) — and (c)'s old −3%
+              floor. The strong-convergence + tight-today_spread guard keeps this
+              targeted: ratio bumped 70% → 80% so 3376's 0.74x still qualifies,
+              while 8932 5/14 (no convergence: 2.14% > 1.33%) and 7768 6/01
+              (today_spread 2.26% > 2%) remain rejected.
           (d) prev_spread ≤ 2.5% AND prev_close ∈ [min_MA, max_MA*1.02] AND
               today_spread ≤ 2% → V-reversal continuation: yesterday's MAs were
               already tangled and yesterday's reversal K just stood on top of
@@ -237,14 +243,15 @@ class Screener:
         # (c) convergence-driven breakout: today's K collapsed the MA spread.
         # Independent of yesterday's spread — allows cases where MAs were still
         # in 空頭排列 yesterday but today's gain pulled them into a tight band.
-        # The −3% slack on prev_close (vs strict ≥ min_MA) is needed for cases
-        # like 3535/3376 6/01 where consecutive black Ks pushed prev_close
-        # ~2% below min_MA before today's V-recovery — still a real tangle
-        # break, not a mechanical-convergence artifact, because MAs were
-        # genuinely converging on their own (prev_spread already ≤ 2.5~3%).
+        # The −5% slack on prev_close (vs strict ≥ min_MA) is needed for cases
+        # like 3535/3376 6/01 (~2% below min_MA) and 3264 6/03 (−4.58% below an
+        # already-tight 1.96% band) where consecutive black Ks pushed prev_close
+        # below the band before today's V-recovery — still a real tangle break,
+        # not a mechanical-convergence artifact, because the MAs were genuinely
+        # converging on their own and today_spread collapsed (≤ 0.80x).
         if (today_spread <= 0.02
                 and today_spread <= prev_spread * 0.80
-                and prev_close >= prev_min_ma * 0.97):
+                and prev_close >= prev_min_ma * 0.95):
             return True
 
         # The remaining (a)/(a')/(b) paths require yesterday's MAs to already be tangled.
