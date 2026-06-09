@@ -81,15 +81,24 @@ def main():
     today_str = price_df["date"].max().strftime("%Y-%m-%d")
     print(f"      Latest trading date: {today_str}")
 
-    # yfinance only reports 盤中一般交易 volume — miss 盤後定價. Override today's
-    # row with the TWSE/TPEx EOD figure (matches what 三竹 / brokers display).
+    # The TWSE/TPEx EOD snapshot is the authoritative source for today's bar.
+    # yfinance has two failure modes on today's row: (1) it only reports 盤中一般
+    # 交易 volume and misses 盤後定價, and (2) it intermittently serves a *partial/
+    # stale* today-bar whose OHLC reflects an early-session quote rather than the
+    # close. Previously only Trading_Volume was overridden, so a stale close
+    # silently failed the breakout/≥4% checks and the stock vanished from the
+    # report even though it was a valid candidate (e.g. 3019/2476/3715 on 6/09 —
+    # all >5% gainers, absent). The missing-bar case (no today-row at all) is
+    # handled by the injection below; this override fixes the partial-bar case by
+    # making the snapshot authoritative for the full OHLCV of today's row.
     today_dt = price_df["date"].max()
     eod = today_df.drop_duplicates(subset="stock_id").set_index("stock_id")
     mask = price_df["date"] == today_dt
-    price_df.loc[mask, "Trading_Volume"] = (
-        price_df.loc[mask, "stock_id"].map(eod["Trading_Volume"])
-        .fillna(price_df.loc[mask, "Trading_Volume"])
-    )
+    today_sids = price_df.loc[mask, "stock_id"]
+    for col in ["open", "max", "min", "close", "Trading_Volume"]:
+        price_df.loc[mask, col] = (
+            today_sids.map(eod[col]).fillna(price_df.loc[mask, col])
+        )
 
     # yfinance intermittently lags today's daily bar for some symbols. The
     # batch-retry in get_stock_history only recovers tickers that returned NO
