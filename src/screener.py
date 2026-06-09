@@ -248,9 +248,17 @@ class Screener:
         # already-tight 1.96% band) where consecutive black Ks pushed prev_close
         # below the band before today's V-recovery — still a real tangle break,
         # not a mechanical-convergence artifact, because the MAs were genuinely
-        # converging on their own and today_spread collapsed (≤ 0.80x).
+        # converging on their own and today_spread collapsed strongly.
+        # Convergence ratio tightened 0.80 → 0.75 on 6/09: across every (c)
+        # true-positive in the backtest the ratio tops out at 0.74 (2493 5/14,
+        # 1773 5/22, 3376 6/01), while 2313 華通 6/09 — a +9.52% dead-cat bounce
+        # off a 6-day steady decline (prev_close −3.97% below the band, but only
+        # marginal convergence at 0.78x and today_spread right at the 1.99%
+        # ceiling) — sat just above. 三竹 didn't flag it; the 0.75 cutoff rejects
+        # it while keeping 3376's 0.74x. (c) is the only path 2313 could hit: its
+        # prev_spread 2.57% > 2.5% makes the gate below reject every other path.
         if (today_spread <= 0.02
-                and today_spread <= prev_spread * 0.80
+                and today_spread <= prev_spread * 0.75
                 and prev_close >= prev_min_ma * 0.95):
             return True
 
