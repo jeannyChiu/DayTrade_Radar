@@ -128,18 +128,32 @@ def main():
         )
         print(f"      injected {len(inject)} today-bars from EOD snapshot (yfinance lag)")
 
-    # Top-100 漲幅 ranking — use yfinance prev_close (handles 除權息 X-flag rows
-    # that the TWSE snapshot reports as spread=0; e.g. 2486 一詮 on 2026-05-25).
+    # Authoritative prev_close for 漲跌幅. yfinance intermittently drops a single
+    # *intermediate* daily bar for one ticker (6719 力智 missing 2026-06-15 on
+    # 06-16), so "last yfinance close before today" silently falls back to an
+    # even older session and inflates the computed change — 6719's real -0.42%
+    # became +9.36%, wrongly entering 漲幅前百 and the report. The override/inject
+    # guards above only cover a missing *today* bar, not a missing prior one.
+    # The TWSE/TPEx EOD snapshot's 漲跌價差 (spread) is taken against the correct
+    # reference price (incl. 除權息參考價), so prev_ref = close - spread is the
+    # authoritative昨收 whenever spread is a valid non-zero number. Fall back to
+    # yfinance prev_close only when spread is 0/NaN, which covers 除權息 X-flag
+    # rows the snapshot reports as spread=0 (e.g. 2486 一詮 2026-05-25) — there
+    # yfinance's auto_adjust already encodes the reference drop.
     prev_close_yf = (
         price_df[price_df["date"] < today_dt]
         .sort_values("date").groupby("stock_id")["close"].last()
     )
+    eod_prev = eod["close"] - eod["spread"]
+    valid_spread = eod["spread"].notna() & (eod["spread"] != 0) & (eod_prev > 0)
+    prev_close_auth = prev_close_yf.copy()
+    prev_close_auth.update(eod_prev[valid_spread])
     close_today_yf = (
         price_df[price_df["date"] == today_dt]
         .set_index("stock_id")["close"]
     )
-    yf_change_pct = ((close_today_yf - prev_close_yf) / prev_close_yf).dropna()
-    top100_change = set(yf_change_pct.nlargest(100).index)
+    change_auth = ((close_today_yf - prev_close_auth) / prev_close_auth).dropna()
+    top100_change = set(change_auth.nlargest(100).index)
 
     # ── 4. Institutional investor data ─────────────────────────────────────────
     print("[4/7] Fetching institutional investor data ...")
@@ -159,6 +173,7 @@ def main():
         top100_change=top100_change,
         top100_volume=top100_volume,
         inner_outer_df=inner_outer_df,
+        prev_close_map=prev_close_auth.to_dict(),
     )
 
     p1, p2 = len(results["p1"]), len(results["p2"])

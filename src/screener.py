@@ -24,6 +24,7 @@ class Screener:
         top100_change: Set[str] = None,
         top100_volume: Set[str] = None,
         inner_outer_df: pd.DataFrame = None,
+        prev_close_map: dict = None,
     ) -> dict:
         if name_map is None:
             name_map = {}
@@ -34,15 +35,26 @@ class Screener:
         if today_price.empty:
             return {"p1": [], "p2": [], "p3": []}
 
-        # Previous day's close for accurate % change calculation
-        prev_price = (
-            price_df[price_df["date"] < today_dt]
-            .sort_values("date")
-            .groupby("stock_id")
-            .last()
-            .reset_index()[["stock_id", "close"]]
-            .rename(columns={"close": "prev_close"})
-        )
+        # Previous day's close for accurate % change. Prefer the authoritative
+        # prev_close passed in from main.py (built from the EOD snapshot's
+        # official 漲跌價差); this guards against yfinance dropping an
+        # intermediate daily bar, which would otherwise let prev_close fall back
+        # to an older session and inflate the change (6719 力智 2026-06-16).
+        # Fall back to yfinance's own last-prior close when no map is supplied.
+        if prev_close_map is not None:
+            prev_price = pd.DataFrame(
+                {"stock_id": list(prev_close_map.keys()),
+                 "prev_close": list(prev_close_map.values())}
+            )
+        else:
+            prev_price = (
+                price_df[price_df["date"] < today_dt]
+                .sort_values("date")
+                .groupby("stock_id")
+                .last()
+                .reset_index()[["stock_id", "close"]]
+                .rename(columns={"close": "prev_close"})
+            )
 
         today_ext = today_price.merge(prev_price, on="stock_id", how="left")
         today_ext["change_pct"] = (
