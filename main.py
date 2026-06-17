@@ -128,6 +128,56 @@ def main():
         )
         print(f"      injected {len(inject)} today-bars from EOD snapshot (yfinance lag)")
 
+    # yfinance also intermittently drops the *prior* trading-day bar (40/318
+    # candidates on 2026-06-17, incl. 6862 三集瑞 and 3715 定穎投控). The
+    # screener's _breakout_tangled_ma reads prev_close as the raw yfinance bar at
+    # iloc[-2]; when 06-16 is missing it silently uses 06-15 instead, so the
+    # ≥4% gate, prev_spread and the prev_close→MA-band positioning all key off
+    # the wrong day. This cuts both ways: 6862's real 188→206.5 (+9.84%) looked
+    # like +2.23% off 06-15's 202 and was dropped, while 3715's real 171→176
+    # (+2.92%) looked like +4.14% off 06-15's 169 and was wrongly included.
+    # yfinance has no 06-16 bar even on a per-ticker refetch, so the only
+    # authoritative source for that close is the EOD snapshot's 昨收 (close −
+    # spread). Inject a synthetic prior-day bar so the close-based MA/breakout
+    # pipeline sees a complete series and keys 漲跌幅/prev_spread/band-position
+    # off the right day. Only the close is recoverable (open/high/low are set to
+    # the close as placeholders), so the row is flagged `synthetic=True` and the
+    # candlestick-shape conditions (一紅吃三黑/內困三日翻紅) drop it and evaluate on
+    # the real bars only — they must not read a fabricated open/high/low, but they
+    # also must still fire on stocks that genuinely qualify (e.g. 3715 2026-06-17
+    # is a real 一紅吃三黑 and stays, only its wrong breakout tag is dropped).
+    # Gated on a valid non-zero spread.
+    price_df["synthetic"] = False
+    market_dates = sorted(price_df["date"].unique())
+    if len(market_dates) >= 2 and market_dates[-1] == today_dt:
+        prev_trading_dt = market_dates[-2]
+        have_prev = set(price_df.loc[price_df["date"] == prev_trading_dt, "stock_id"])
+        eod_prev_close = eod["close"] - eod["spread"]
+        gap_ids = [
+            s for s in have_today
+            if s not in have_prev and s in eod.index
+            and pd.notna(eod.loc[s, "spread"]) and eod.loc[s, "spread"] != 0
+            and eod_prev_close.get(s, 0) > 0
+        ]
+        if gap_ids:
+            prev_bar = pd.DataFrame({
+                "stock_id": gap_ids,
+                "date": prev_trading_dt,
+                "open": [eod_prev_close[s] for s in gap_ids],
+                "max":  [eod_prev_close[s] for s in gap_ids],
+                "min":  [eod_prev_close[s] for s in gap_ids],
+                "close": [eod_prev_close[s] for s in gap_ids],
+                "Trading_Volume": 0,
+                "synthetic": True,
+            })
+            price_df = (
+                pd.concat([price_df, prev_bar], ignore_index=True)
+                .sort_values(["stock_id", "date"])
+                .reset_index(drop=True)
+            )
+            price_df["synthetic"] = price_df["synthetic"].fillna(False)
+            print(f"      injected {len(gap_ids)} prior-day bars from EOD 昨收 (yfinance gap)")
+
     # Authoritative prev_close for 漲跌幅. yfinance intermittently drops a single
     # *intermediate* daily bar for one ticker (6719 力智 missing 2026-06-15 on
     # 06-16), so "last yfinance close before today" silently falls back to an

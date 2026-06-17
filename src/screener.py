@@ -154,6 +154,13 @@ class Screener:
     def _red_eats_three_black(self, g: pd.DataFrame) -> bool:
         """一紅吃三黑: today is red K, previous 3 days are all black K,
         and today's close > max high of those 3 black days."""
+        # A synthetic prior-day bar (yfinance gap, reconstructed close-only) has
+        # placeholder open/high/low, so drop it and evaluate this candlestick
+        # shape on the real bars only — same series this condition saw before
+        # the gap-injection existed (e.g. 3715 2026-06-17 is a genuine 一紅吃三黑
+        # and must stay even though its breakout tag is correctly dropped).
+        if "synthetic" in g.columns:
+            g = g[~g["synthetic"].astype(bool)]
         if len(g) < 4:
             return False
         today = g.iloc[-1]
@@ -352,6 +359,11 @@ class Screener:
         and today breaks above both previous highs.
         Yesterday's color is not constrained — a small red inside bar is
         actually a stronger reversal hint."""
+        # Drop the synthetic (reconstructed close-only) prior bar — its
+        # open/high/low are placeholders — and evaluate on the real bars, the
+        # same series this condition used before gap-injection existed.
+        if "synthetic" in g.columns:
+            g = g[~g["synthetic"].astype(bool)]
         if len(g) < 3:
             return False
         d2 = g.iloc[-3]   # 2 days ago (long black)
