@@ -37,21 +37,31 @@ class DataFetcher:
                 continue
             if resp.status_code != 200:
                 continue
+            # TWSE 於 2026-06 把 STOCK_DAY_ALL?response=json 改成回傳 UTF-8 CSV，
+            # 不再是 JSON。先試 JSON（舊格式），失敗則退回解析 CSV；兩者都不通
+            # （維護頁 HTML 等）才跳下一天。否則 resp.json() 會無聲吞掉整個上市快照，
+            # 漲幅排行/篩選只剩上櫃。
+            df = None
             try:
                 body = resp.json()
+                if body.get("stat") != "OK" or not body.get("data"):
+                    continue
+                df = pd.DataFrame(body.get("data", []), columns=body.get("fields", []))
             except ValueError:
-                # 非 JSON 回應 (e.g. TWSE 維護中回 HTML 維護頁) → 跳下一天
-                print(f"  TWSE snapshot non-JSON response ({date_str}); maintenance? retrying earlier date")
-                continue
-            if body.get("stat") != "OK" or not body.get("data"):
-                continue
+                import io
+                resp.encoding = "utf-8"
+                try:
+                    df = pd.read_csv(io.StringIO(resp.text), dtype=str)
+                except Exception:
+                    print(f"  TWSE snapshot unparsable response ({date_str}); maintenance? retrying earlier date")
+                    continue
+                if df is None or df.empty or "證券代號" not in df.columns:
+                    print(f"  TWSE snapshot CSV missing expected columns ({date_str}); retrying earlier date")
+                    continue
             print(f"  TWSE snapshot date: {date.strftime('%Y-%m-%d')}")
             break
         else:
             return pd.DataFrame()
-
-        fields = body.get("fields", [])
-        df = pd.DataFrame(body.get("data", []), columns=fields)
 
         col_map = {
             "證券代號": "stock_id", "證券名稱": "name",
